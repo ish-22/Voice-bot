@@ -114,92 +114,62 @@ export default function App() {
         }
     };
 
+    // Fetch AI response from Vercel serverless function
+    const getAIResponse = async (prompt: string): Promise<string> => {
+        try {
+            const res = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt, language: selectedLanguage.code })
+            });
+            const data = await res.json();
+            return data.reply ?? prompt;
+        } catch (e) {
+            console.error('Error fetching AI response', e);
+            return prompt;
+        }
+    };
+
     const addBotMessage = (text: string) => {
         setMessages(prev => [...prev, { id: Math.random().toString(), sender: 'bot', text, timestamp: new Date() }]);
         speak(text);
     };
 
-    const handleUserMessage = (text: string) => {
+    const handleUserMessage = async (text: string) => {
         setMessages(prev => [...prev, { id: Math.random().toString(), sender: 'user', text, timestamp: new Date() }]);
 
         // Simple state machine for demo purposes
-        setTimeout(() => {
+        setTimeout(async () => {
+            let botPrompt = '';
             switch (appointmentState) {
                 case 'COLLECTING_NAME':
                     setAppointmentDetails(prev => ({ ...prev, name: text }));
-                    addBotMessage(getTranslatedResponse('Thanks! What date would you like to book?', selectedLanguage.code));
+                    botPrompt = 'Thanks! What date would you like to book?';
                     setAppointmentState('COLLECTING_DATE');
                     break;
                 case 'COLLECTING_DATE':
                     setAppointmentDetails(prev => ({ ...prev, date: text }));
-                    addBotMessage(getTranslatedResponse('Got it. What time works best for you?', selectedLanguage.code));
+                    botPrompt = 'Got it. What time works best for you?';
                     setAppointmentState('COLLECTING_TIME');
                     break;
                 case 'COLLECTING_TIME':
+                    const name = appointmentDetails.name;
+                    const date = appointmentDetails.date;
                     setAppointmentDetails(prev => ({ ...prev, time: text }));
-                    addBotMessage(getTranslatedResponse('Perfect. Your appointment is confirmed!', selectedLanguage.code));
+                    botPrompt = `Your appointment for ${name} on ${date} at ${text} is confirmed!`;
                     setAppointmentState('CONFIRMED');
                     break;
                 default:
-                    addBotMessage(getTranslatedResponse('How else can I assist you?', selectedLanguage.code));
+                    botPrompt = 'How else can I assist you?';
             }
-        }, 1000);
+            if (botPrompt) {
+                const aiReply = await getAIResponse(botPrompt);
+                addBotMessage(aiReply);
+            }
+        }, 500);
     };
 
-    // Mock translations for the demo flow
-    const getTranslatedResponse = (enText: string, langCode: string) => {
-        const dict: Record<string, Record<string, string>> = {
-            'Thanks! What date would you like to book?': {
-                'es-ES': '¡Gracias! ¿Para qué fecha le gustaría reservar?',
-                'fr-FR': 'Merci ! Quelle date souhaitez-vous réserver ?',
-                'de-DE': 'Danke! Welches Datum möchten Sie buchen?',
-                'zh-CN': '谢谢！您想预订哪天？',
-                'ja-JP': 'ありがとうございます！ご希望の日にちはいつですか？',
-                'ar-SA': 'شكراً! ما التاريخ الذي تود حجزه؟',
-                'ru-RU': 'Спасибо! На какую дату вы хотите записаться?',
-                'hi-IN': 'धन्यवाद! आप किस तारीख को बुक करना चाहेंगे?',
-                'pt-BR': 'Obrigado! Para qual data você gostaria de marcar?',
-                'si-LK': 'ස්තූතියි! ඔබ කුමන දිනයක් වෙන්කරවා ගැනීමට කැමතිද?'
-            },
-            'Got it. What time works best for you?': {
-                'es-ES': 'Entendido. ¿A qué hora le viene mejor?',
-                'fr-FR': 'Compris. Quelle heure vous convient le mieux ?',
-                'de-DE': 'Verstanden. Welche Uhrzeit passt Ihnen am besten?',
-                'zh-CN': '明白了。什么时间最适合您？',
-                'ja-JP': '承知しました。何時がご都合よろしいでしょうか？',
-                'ar-SA': 'فهمت. ما الوقت الذي يناسبك؟',
-                'ru-RU': 'Понятно. Какое время вам больше подходит?',
-                'hi-IN': 'समझ गया। आपके लिए कौन सा समय सबसे अच्छा रहेगा?',
-                'pt-BR': 'Entendi. Qual horário funciona melhor para você?',
-                'si-LK': 'තේරුණා. ඔබට වඩාත් සුදුසු කුමන වේලාවද?'
-            },
-            'Perfect. Your appointment is confirmed!': {
-                'es-ES': '¡Perfecto. Su cita está confirmada!',
-                'fr-FR': 'Parfait. Votre rendez-vous est confirmé !',
-                'de-DE': 'Perfekt. Ihr Termin ist bestätigt!',
-                'zh-CN': '完美。您的预约已确认！',
-                'ja-JP': '完璧です。ご予約が確定しました！',
-                'ar-SA': 'ممتاز. تم تأكيد موعدك!',
-                'ru-RU': 'Отлично. Ваша запись подтверждена!',
-                'hi-IN': 'उत्तम। आपका अपॉइंटमेंट पक्का हो गया है!',
-                'pt-BR': 'Perfeito. Sua consulta está confirmada!',
-                'si-LK': 'විශිෂ්ටයි. ඔබගේ හමුවීම තහවුරු කර ඇත!'
-            },
-            'How else can I assist you?': {
-                'es-ES': '¿En qué más puedo ayudarle?',
-                'fr-FR': 'Comment puis-je vous aider autrement ?',
-                'de-DE': 'Wie kann ich Ihnen sonst noch helfen?',
-                'zh-CN': '我还能为您提供什么帮助？',
-                'ja-JP': '他にお手伝いできることはありますか？',
-                'ar-SA': 'كيف يمكنني مساعدتك أيضاً؟',
-                'ru-RU': 'Чем еще я могу вам помочь?',
-                'hi-IN': 'मैं आपकी और क्या सहायता कर सकता हूँ?',
-                'pt-BR': 'Como mais posso ajudá-lo?',
-                'si-LK': 'මට ඔබට වෙනත් ආකාරයකින් උදව් කළ හැක්කේ කෙසේද?'
-            }
-        };
-        return dict[enText]?.[langCode] || enText;
-    };
+    // Removed mock translation function – using AI for responses
 
     const toggleListen = () => {
         if (isListening) {
