@@ -1,6 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, MicOff, Globe, Calendar, Clock, User, CheckCircle2, Languages } from 'lucide-react';
+import { Mic, MicOff, Globe, Calendar, Clock, User, CheckCircle2, Languages, RotateCcw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+
+const playBeep = (start = true) => {
+    try {
+        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        oscillator.type = 'sine';
+        oscillator.frequency.value = start ? 800 : 400; // Higher pitch for start, lower for stop
+        gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+        oscillator.start();
+        oscillator.stop(audioCtx.currentTime + 0.15);
+    } catch (e) { /* Ignore */ }
+};
 
 const LANGUAGES = [
     { code: 'en-US', name: 'English', greeting: 'Hello, how can I help you book an appointment today?' },
@@ -89,7 +105,7 @@ export default function App() {
         } else {
             // OS lacks the voice natively (e.g. Arabic, Sinhala on Windows). Fallback to Google TTS audio!
             const audio = new Audio(`https://translate.google.com/translate_tts?ie=UTF-8&tl=${selectedLanguage.code.split('-')[0]}&client=tw-ob&q=${encodeURIComponent(text)}`);
-            audio.play().catch(err => {
+            audio.play().catch(() => {
                 // Failsafe native fallback if audio fails
                 const utterance = new SpeechSynthesisUtterance(text);
                 utterance.lang = selectedLanguage.code;
@@ -187,8 +203,10 @@ export default function App() {
 
     const toggleListen = () => {
         if (isListening) {
+            playBeep(false);
             recognitionRef.current?.stop();
         } else {
+            playBeep(true);
             if (synthesis.speaking) synthesis.cancel();
             try {
                 recognitionRef.current?.start();
@@ -269,6 +287,30 @@ export default function App() {
                 animate={{ opacity: 1, x: 0 }}
                 className="w-full md:w-2/3 max-w-2xl bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden flex flex-col shadow-2xl h-[600px] relative"
             >
+                {/* Chat Top Bar */}
+                <div className="flex justify-between items-center bg-slate-900/80 backdrop-blur border-b border-slate-800 p-5 px-6 z-20">
+                    <div className="flex items-center gap-2">
+                        {isListening ? (
+                            <motion.div animate={{ opacity: [0.5, 1, 0.5] }} transition={{ repeat: Infinity, duration: 1 }} className="text-emerald-400 font-medium text-sm flex items-center gap-2">
+                                <span className="relative flex h-3 w-3">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                                </span>
+                                Listening...
+                            </motion.div>
+                        ) : (
+                            <span className="text-slate-500 font-medium text-sm">Waiting for voice input...</span>
+                        )}
+                    </div>
+                    <button
+                        onClick={() => handleLanguageChange(selectedLanguage)}
+                        className="text-slate-400 hover:text-white transition-colors p-2 rounded-lg hover:bg-slate-800 flex items-center gap-2 text-sm font-medium"
+                        title="Restart Conversation"
+                    >
+                        <RotateCcw className="w-4 h-4" /> Restart
+                    </button>
+                </div>
+
                 <div className="flex-1 p-6 overflow-y-auto space-y-6 scroll-smooth">
                     <AnimatePresence>
                         {messages.map((msg) => (
